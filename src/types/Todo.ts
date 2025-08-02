@@ -3,7 +3,6 @@ export interface Todo {
   userId: number;
   title: string;
   completed: boolean;
-  isLoading?: boolean;
 }
 
 export enum FilterType {

@@ -5,27 +5,27 @@ import { TodoItem } from '../TodoItem/todoItem';
 interface Props {
   todos: Todo[];
   onDelete: (id: number) => void;
-  onToggle: (todo: Todo) => void;
-  onRename: (todo: Todo, newTitle: string) => void;
+  onToggle: (id: number, completed: boolean) => void;
+  loadingId: number | null;
+  loadingTodoIds: number[];
+  tempId: number | null;
 }
 
 export const TodoList: React.FC<Props> = ({
   todos,
   onDelete,
   onToggle,
-  onRename,
-}) => {
-  return (
-    <section className="todoapp__main" data-cy="TodoList">
-      {todos.map(todo => (
-        <TodoItem
-          key={todo.id}
-          todo={todo}
-          onDelete={onDelete}
-          onToggle={onToggle}
-          onRename={onRename}
-        />
-      ))}
-    </section>
-  );
-};
+  loadingTodoIds,
+}) => (
+  <section className="todoapp__main" data-cy="TodoList">
+    {todos.map(todo => (
+      <TodoItem
+        key={todo.id}
+        todo={todo}
+        onDelete={onDelete}
+        onToggle={onToggle}
+        loading={loadingTodoIds.includes(todo.id)}
+      />
+    ))}
+  </section>
+);

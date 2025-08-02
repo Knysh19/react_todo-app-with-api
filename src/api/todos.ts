@@ -23,6 +23,5 @@ export const clearCompletedTodos = (ids: number[]) => {
   return Promise.all(ids.map(id => deleteTodo(id)));
 };
 
-export const patchTodo = (id: number, data: Partial<Todo>) => {
-  return client.patch<Todo>(`/todos/${id}`, data);
-};
+export const updateTodo = (id: number, data: Partial<Todo>) =>
+  client.patch<Todo>(`/todos/${id}`, data);

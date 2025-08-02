@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+/* eslint-disable jsx-a11y/label-has-associated-control */
+/* eslint-disable jsx-a11y/control-has-associated-label */
+import React, { useEffect, useState, useRef } from 'react';
 import { Todo } from './types/Todo';
 import {
   getTodos,
@@ -6,7 +8,6 @@ import {
   deleteTodo,
   clearCompletedTodos,
   USER_ID,
-  patchTodo,
 } from './api/todos';
 import { Header } from './components/Header/header';
 import { TodoList } from './components/TodoList/todoList';
@@ -14,13 +15,23 @@ import { Footer } from './components/Footer/footer';
 import { ErrorNotification } from './components/error/ErrorNotification';
 import { FilterType } from './types/Todo';
 import { UserWarning } from './UserWarning';
+import { updateTodo } from './api/todos';
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterType>(FilterType.All);
   const [title, setTitle] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false); // <-- Новий стан
+  const [adding, setAdding] = useState(false);
+  const [tempId, setTempId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [loadingTodoIds, setLoadingTodoIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!adding && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [adding]);
 
   useEffect(() => {
     setError('');
@@ -51,9 +62,42 @@ export const App: React.FC = () => {
         : t.completed,
   );
 
-  const activeCount = todos.filter(t => !t.completed).length;
+  const activeCount = todos.filter(
+    t => !t.completed && (tempId === null || t.id !== tempId),
+  ).length;
   const hasCompleted = todos.some(t => t.completed);
   const allCompleted = todos.length > 0 && todos.every(t => t.completed);
+
+  const handleToggle = async (id: number, completed: boolean) => {
+    try {
+      await updateTodo(id, { completed });
+      setTodos(prev =>
+        prev.map(todo => (todo.id === id ? { ...todo, completed } : todo)),
+      );
+    } catch {
+      setError('Unable to update a todo');
+    }
+  };
+
+  const handleToggleAll = async () => {
+    const newCompleted = !allCompleted;
+    const toUpdate = todos.filter(t => t.completed !== newCompleted);
+
+    try {
+      await Promise.all(
+        toUpdate.map(t => updateTodo(t.id, { completed: newCompleted })),
+      );
+      setTodos(prev =>
+        prev.map(t =>
+          toUpdate.find(u => u.id === t.id)
+            ? { ...t, completed: newCompleted }
+            : t,
+        ),
+      );
+    } catch {
+      setError('Unable to update a todo');
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,25 +109,41 @@ export const App: React.FC = () => {
       return;
     }
 
-    setIsSubmitting(true); // <-- Блокуємо інпут
+    const newTempId = Date.now();
+
+    setTempId(newTempId);
+    setTodos(prev => [
+      ...prev,
+      { id: newTempId, userId: USER_ID, title: txt, completed: false },
+    ]);
+
+    setAdding(true);
 
     try {
       const res = await createTodo(txt);
-      setTodos(prev => [...prev, res]);
+
+      setTodos(prev => prev.map(t => (t.id === newTempId ? res : t)));
+
       setTitle('');
     } catch {
+      setTodos(prev => prev.filter(t => t.id !== newTempId));
       setError('Unable to add a todo');
     } finally {
-      setIsSubmitting(false); // <-- Розблокуємо інпут
+      setAdding(false);
+      setTempId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
+    setLoadingTodoIds(prev => [...prev, id]);
+
     try {
       await deleteTodo(id);
       setTodos(prev => prev.filter(t => t.id !== id));
     } catch {
       setError('Unable to delete a todo');
+    } finally {
+      setLoadingTodoIds(prev => prev.filter(loadingId => loadingId !== id));
     }
   };
 
@@ -98,54 +158,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleToggle = async (todo: Todo) => {
-    try {
-      const updated = await patchTodo(todo.id, { completed: !todo.completed });
-
-      setTodos(prev => prev.map(t => (t.id === todo.id ? updated : t)));
-    } catch {
-      setError('Unable to update a todo');
-    }
-  };
-
-  const handleRename = async (todo: Todo, newTitle: string) => {
-    if (newTitle.trim() === '') {
-      handleDelete(todo.id);
-      return;
-    }
-
-    if (newTitle === todo.title) {
-      return;
-    }
-
-    try {
-      const updated = await patchTodo(todo.id, { title: newTitle });
-      setTodos(prev => prev.map(t => (t.id === todo.id ? updated : t)));
-    } catch {
-      setError('Unable to update a todo');
-    }
-  };
-
-  const toggleAll = async () => {
-    const newStatus = !allCompleted;
-    const updates = todos.filter(t => t.completed !== newStatus);
-
-    const updatedTodos = await Promise.all(
-      updates.map(async t => {
-        try {
-          return await patchTodo(t.id, { completed: newStatus });
-        } catch {
-          setError('Unable to update a todo');
-          return t;
-        }
-      }),
-    );
-
-    setTodos(prev =>
-      prev.map(t => updatedTodos.find(ut => ut.id === t.id) || t),
-    );
-  };
-
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
@@ -157,8 +169,9 @@ export const App: React.FC = () => {
           setTitle={setTitle}
           onAddTodo={handleAdd}
           allCompleted={allCompleted}
-          toggleAll={toggleAll}
-          isSubmitting={isSubmitting}
+          onToggleAll={handleToggleAll}
+          isAdding={adding}
+          inputRef={inputRef}
         />
 
         {todos.length > 0 && (
@@ -167,7 +180,8 @@ export const App: React.FC = () => {
               todos={filtered}
               onDelete={handleDelete}
               onToggle={handleToggle}
-              onRename={handleRename}
+              loadingTodoIds={loadingTodoIds}
+              tempId={tempId}
             />
             <Footer
               filter={filter}
