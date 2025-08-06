@@ -8,6 +8,7 @@ interface Props {
   onToggleAll: () => void;
   isAdding: boolean;
   inputRef: React.RefObject<HTMLInputElement>;
+  showToggleAll: boolean;
 }
 
 export const Header: React.FC<Props> = ({
@@ -18,14 +19,17 @@ export const Header: React.FC<Props> = ({
   onToggleAll,
   isAdding,
   inputRef,
+  showToggleAll,
 }) => (
   <header className="todoapp__header">
-    <button
-      type="button"
-      className={`todoapp__toggle-all ${allCompleted ? 'active' : ''}`}
-      data-cy="ToggleAllButton"
-      onClick={onToggleAll}
-    />
+    {showToggleAll && (
+      <button
+        type="button"
+        className={`todoapp__toggle-all ${allCompleted ? 'active' : ''}`}
+        data-cy="ToggleAllButton"
+        onClick={onToggleAll}
+      />
+    )}
     <form onSubmit={onAddTodo}>
       <input
         ref={inputRef}

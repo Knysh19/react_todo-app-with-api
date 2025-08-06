@@ -1,14 +1,10 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
+/* eslint-disable @typescript-eslint/indent */
+
 import React, { useEffect, useState, useRef } from 'react';
 import { Todo } from './types/Todo';
-import {
-  getTodos,
-  createTodo,
-  deleteTodo,
-  clearCompletedTodos,
-  USER_ID,
-} from './api/todos';
+import { getTodos, createTodo, deleteTodo, USER_ID } from './api/todos';
 import { Header } from './components/Header/header';
 import { TodoList } from './components/TodoList/todoList';
 import { Footer } from './components/Footer/footer';
@@ -25,7 +21,9 @@ export const App: React.FC = () => {
   const [adding, setAdding] = useState(false);
   const [tempId, setTempId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [loadingTodoIds, setLoadingTodoIds] = useState<number[]>([]);
+  const [loadingTodoIds, setLoadingTodoIds] = React.useState<
+    (number | string)[]
+  >([]);
 
   useEffect(() => {
     if (!adding && inputRef.current) {
@@ -69,6 +67,7 @@ export const App: React.FC = () => {
   const allCompleted = todos.length > 0 && todos.every(t => t.completed);
 
   const handleToggle = async (id: number, completed: boolean) => {
+    setLoadingTodoIds(prev => [...prev, id]);
     try {
       await updateTodo(id, { completed });
       setTodos(prev =>
@@ -76,26 +75,32 @@ export const App: React.FC = () => {
       );
     } catch {
       setError('Unable to update a todo');
+    } finally {
+      setLoadingTodoIds(prev => prev.filter(loadingId => loadingId !== id));
     }
   };
 
   const handleToggleAll = async () => {
     const newCompleted = !allCompleted;
-    const toUpdate = todos.filter(t => t.completed !== newCompleted);
+    const toUpdate = todos
+      .filter(t => t.completed !== newCompleted)
+      .map(t => t.id);
+
+    setLoadingTodoIds(prev => [...prev, ...toUpdate]);
 
     try {
       await Promise.all(
-        toUpdate.map(t => updateTodo(t.id, { completed: newCompleted })),
+        toUpdate.map(id => updateTodo(id, { completed: newCompleted })),
       );
       setTodos(prev =>
         prev.map(t =>
-          toUpdate.find(u => u.id === t.id)
-            ? { ...t, completed: newCompleted }
-            : t,
+          toUpdate.includes(t.id) ? { ...t, completed: newCompleted } : t,
         ),
       );
     } catch {
       setError('Unable to update a todo');
+    } finally {
+      setLoadingTodoIds(prev => prev.filter(id => !toUpdate.includes(id)));
     }
   };
 
@@ -140,6 +145,10 @@ export const App: React.FC = () => {
     try {
       await deleteTodo(id);
       setTodos(prev => prev.filter(t => t.id !== id));
+
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     } catch {
       setError('Unable to delete a todo');
     } finally {
@@ -148,13 +157,44 @@ export const App: React.FC = () => {
   };
 
   const handleClear = async () => {
-    try {
-      const ids = todos.filter(t => t.completed).map(t => t.id);
+    const completedIds = todos.filter(t => t.completed).map(t => t.id);
+    const succeeded: number[] = [];
+    const failed: number[] = [];
 
-      await clearCompletedTodos(ids);
-      setTodos(prev => prev.filter(t => !t.completed));
-    } catch {
-      setError('Unable to clear completed todos');
+    for (const id of completedIds) {
+      try {
+        await deleteTodo(id);
+        succeeded.push(id);
+      } catch {
+        failed.push(id);
+      }
+    }
+
+    if (succeeded.length > 0) {
+      setTodos(prev => prev.filter(t => !succeeded.includes(t.id)));
+    }
+
+    if (failed.length > 0) {
+      setError('Unable to delete a todo');
+    }
+
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  const handleRename = async (id: number, newTitle: string) => {
+    setLoadingTodoIds(prev => [...prev, id]);
+    try {
+      await updateTodo(id, { title: newTitle });
+      setTodos(prev =>
+        prev.map(t => (t.id === id ? { ...t, title: newTitle } : t)),
+      );
+    } catch (e) {
+      setError('Unable to update a todo');
+      throw e;
+    } finally {
+      setLoadingTodoIds(prev => prev.filter(loadingId => loadingId !== id));
     }
   };
 
@@ -172,6 +212,7 @@ export const App: React.FC = () => {
           onToggleAll={handleToggleAll}
           isAdding={adding}
           inputRef={inputRef}
+          showToggleAll={todos.length > 0}
         />
 
         {todos.length > 0 && (
@@ -182,6 +223,7 @@ export const App: React.FC = () => {
               onToggle={handleToggle}
               loadingTodoIds={loadingTodoIds}
               tempId={tempId}
+              onRename={handleRename}
             />
             <Footer
               filter={filter}

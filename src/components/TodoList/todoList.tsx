@@ -6,9 +6,9 @@ interface Props {
   todos: Todo[];
   onDelete: (id: number) => void;
   onToggle: (id: number, completed: boolean) => void;
-  loadingId: number | null;
-  loadingTodoIds: number[];
+  loadingTodoIds: (number | string)[];
   tempId: number | null;
+  onRename: (id: number, newTitle: string) => void;
 }
 
 export const TodoList: React.FC<Props> = ({
@@ -16,16 +16,25 @@ export const TodoList: React.FC<Props> = ({
   onDelete,
   onToggle,
   loadingTodoIds,
+  tempId,
+  onRename,
 }) => (
   <section className="todoapp__main" data-cy="TodoList">
-    {todos.map(todo => (
-      <TodoItem
-        key={todo.id}
-        todo={todo}
-        onDelete={onDelete}
-        onToggle={onToggle}
-        loading={loadingTodoIds.includes(todo.id)}
-      />
-    ))}
+    {todos.map(todo => {
+      const isLoading =
+        loadingTodoIds.includes(todo.id) ||
+        (tempId !== null && todo.id === tempId);
+
+      return (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          onDelete={onDelete}
+          onToggle={onToggle}
+          loading={isLoading}
+          onRename={onRename}
+        />
+      );
+    })}
   </section>
 );
